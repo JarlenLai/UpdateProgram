@@ -35,12 +35,7 @@ func main() {
 	updateProgram := NewUpdateProgram()
 	updateProgram.Load(updateCfg)
 
-	///*
-	serverList := updateProgram.StartUpdate()
-	for _, v := range serverList {
-		logU.InfoDoo(v)
-	} //*/
-
+	updateProgram.StartUpdate()
 }
 
 //PathExists 判断路径是否存在

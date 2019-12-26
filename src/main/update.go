@@ -50,8 +50,8 @@ func (up *UpdateProgram) Load(upcfg *UpdateCfg) error {
 	up.target_dir = make(map[string]string, 0)
 	up.target_exe_file = make(map[string]string, 0)
 
-	//根据配置得出需要更新哪些文件
-	suffix := strings.Split(upcfg.file_suffix, ",")
+	//根据源目录配置得出需要更新哪些文件
+	suffix := strings.Split(upcfg.source_file_suffix, ",")
 	if filelist, err := GetFiles(upcfg.source_dir, suffix, true); err == nil {
 		for _, v := range filelist {
 			if str, err := GetFileNameByPath(v); err == nil {
@@ -62,11 +62,18 @@ func (up *UpdateProgram) Load(upcfg *UpdateCfg) error {
 		}
 	}
 
-	//根据配置得出需要更新的目标目录文件夹
+	m := make(map[string]string, 0)
+	//根据目标目录配置得出需要更新的目标目录文件夹
 	up.target_dir, _ = GetCurDirList(upcfg.target_dir, upcfg.server_type)
 	for k, v := range up.target_dir {
-		up.target_exe_file[k] = v + PthSep + up.server_prefix + k + ".exe"
+		//排除不需要更新的serverID
+		if !strings.Contains(upcfg.not_update_serverid, k) {
+			up.target_exe_file[k] = v + PthSep + up.server_prefix + k + ".exe"
+			m[k] = v
+		}
 	}
+
+	up.target_dir = m
 
 	return nil
 }
@@ -75,20 +82,25 @@ func (up *UpdateProgram) Load(upcfg *UpdateCfg) error {
 func (up *UpdateProgram) StartUpdate() (serverName []string) {
 
 	PthSep := string(os.PathSeparator)
+	var success int = 0
+	var fail int = 0
 	//轮询一遍目标目录,进行文件更新
 	for k, v := range up.target_dir {
+
 		if _, ok := up.target_exe_file[k]; !ok {
 			logU.ErrorDoo("serverID:", k, " not exist correspond exe file")
+			fail++
 			continue
 		}
 		curName := up.target_exe_file[k]
 		renName := GetNotDittoFileName(v, up.server_prefix+k, up.author, ".exe")
 
-		//先把目标的exe文件进行重命名
+		//如果目标的exe文件存在就先进行重命名
 		if b := FileIsExisted(curName); b {
 			err := os.Rename(curName, renName)
 			if err != nil {
 				logU.ErrorDoo("Rename file err: ", err, " curName:", curName, " desName:", renName)
+				fail++
 				continue
 			}
 		}
@@ -126,6 +138,7 @@ func (up *UpdateProgram) StartUpdate() (serverName []string) {
 			err = os.Rename(dstExePath, curName)
 			if err != nil {
 				logU.ErrorDoo("Rename file err: ", err, " curName:", dstExePath, " desName:", curName)
+				fail++
 				continue
 			}
 		}
@@ -139,18 +152,27 @@ func (up *UpdateProgram) StartUpdate() (serverName []string) {
 
 			//重启服务，内部会等待直到服务启动或者启动超时
 			if !RestartServer(up.server_prefix + k) {
-				logU.InfoDoo("RestartServer:", up.server_prefix+k, "fail please check:", up.target_exe_file[k])
-				return
+				logU.ErrorDoo("RestartServer:", up.server_prefix+k, "fail please check:", up.target_exe_file[k])
+				fail++
+				goto errorEnd
 			}
 
 			//存储更新成功的程序的服务名
 			serverName = append(serverName, up.server_prefix+k)
 			logU.InfoDoo("File:", up.target_exe_file[k], "update success and restart success version is:", fi.Version)
 		} else {
-			logU.ErrorDoo("File:", up.target_exe_file[k], "update fail version is:", fi.Version)
+			logU.ErrorDoo("File:", up.target_exe_file[k], "update fail version is:", fi.Version, "please check exe_version is match")
+			fail++
+			goto errorEnd
 		}
+
+		success++
+		logU.InfoDoo("Update progress[success:", success, "fail:", fail, "total:", len(up.target_dir))
 	}
 
+	return
+errorEnd:
+	logU.InfoDoo("Update progress[success:", success, "fail:", fail, "total:", len(up.target_dir))
 	return
 }
 
@@ -251,7 +273,7 @@ func ClearBackupFile(fileDir, fileName string, suffixs []string, num int) {
 		//根据修改时间对文件进行排序
 		sort.Sort(FileAttrList(needOpList))
 
-		//删除掉修改时间比较久的文件
+		//删除掉创建时间比较久的文件
 		if len(needOpList) > num {
 			deleteNum := len(needOpList) - num
 			for i := 0; i < deleteNum; i++ {
