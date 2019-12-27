@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"logdoo"
 	"os"
@@ -34,8 +35,12 @@ func main() {
 
 	updateProgram := NewUpdateProgram()
 	updateProgram.Load(updateCfg)
-
 	updateProgram.StartUpdate()
+
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Print("**Update end please check the log to confirm update result**\n\n")
+	fmt.Print(">>please input enter to quit\n")
+	reader.ReadString('\n')
 }
 
 //PathExists 判断路径是否存在
