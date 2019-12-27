@@ -102,6 +102,8 @@ func GetCfgPath() (string, error) {
 			"##source_dir 源目录(更新文件的来源配合 source_file_suffix 使用表示具体更新该目录下的哪些类型的文件)\r\n" +
 			"#source_exe_name 源目录下的主程序文件名称\r\n" +
 			"#target_dir 更新到的目标目录（程序会遍历该目录获取所有的ServerID目录）再具体配合server_type 和 server_prefix 结合拼接成所有所有要更新的子服务目录\r\n" +
+			"#server_type 代表的是serverID目录下的文件夹名（可能是Trade4,Trade5,MT4,MT5等之类的命名\r\n" +
+			"#server_prefix 要更新的服务名称的前缀\r\n" +
 			"#not_update_serverid 表示无需更新的serverID（使用,号隔开）,为空则表示全部都更新\r\n" +
 			"#backup_file_num 最多保留的备份的个数,多余并且最旧的会被清理掉\r\n" +
 			"[Update_Cfg]\r\nsource_dir=\r\nsource_file_suffix=\r\nsource_exe_name=\r\ntarget_dir=\r\nserver_type=\r\nserver_prefix=\r\nnot_update_serverid=\r\nbackup_file_num=\r\n\n"

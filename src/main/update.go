@@ -258,7 +258,7 @@ func (list FileAttrList) Swap(i, j int) {
 
 //清理备份文件(对于某个目录下的某种文件类型,除了当前在使用的那个外，最多能保留多少个，多余的就删除掉)
 func ClearBackupFile(fileDir, fileName string, suffixs []string, num int) {
-	PthSep := string(os.PathListSeparator)
+	PthSep := string(os.PathSeparator)
 	needOpList := make([]*FileAttr, 0)
 	retainFile := fileDir + PthSep + fileName
 	if curFileList, err := GetFiles(fileDir, suffixs, false); err == nil {
@@ -469,4 +469,13 @@ func GetServicePID(serviceName string) (uint32, error) {
 	}
 
 	return 0, fmt.Errorf("no found service %s info", serviceName)
+}
+
+func RemoveService(serviceName []string) {
+	for _, s := range serviceName {
+		if err := winsvc.RemoveService(s); err != nil {
+			logU.ErrorDoo("RemoveService", s, "fail:", err)
+		}
+	}
+
 }
