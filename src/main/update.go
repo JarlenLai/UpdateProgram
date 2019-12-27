@@ -62,18 +62,11 @@ func (up *UpdateProgram) Load(upcfg *UpdateCfg) error {
 		}
 	}
 
-	m := make(map[string]string, 0)
 	//根据目标目录配置得出需要更新的目标目录文件夹
-	up.target_dir, _ = GetCurDirList(upcfg.target_dir, upcfg.server_type)
+	up.target_dir, _ = GetCurDirList(upcfg.target_dir, upcfg.server_type, upcfg.not_update_serverid)
 	for k, v := range up.target_dir {
-		//排除不需要更新的serverID
-		if !strings.Contains(upcfg.not_update_serverid, k) {
-			up.target_exe_file[k] = v + PthSep + up.server_prefix + k + ".exe"
-			m[k] = v
-		}
+		up.target_exe_file[k] = v + PthSep + up.server_prefix + k + ".exe"
 	}
-
-	up.target_dir = m
 
 	return nil
 }
@@ -347,7 +340,7 @@ func CopyFile(dstFileDir string, srcFilePath string) (err error) {
 }
 
 //获取当前路径下的目录
-func GetCurDirList(path string, server_type string) (dirmap map[string]string, err error) {
+func GetCurDirList(path, server_type, filter string) (dirmap map[string]string, err error) {
 	dir, err := ioutil.ReadDir(path)
 	if err != nil {
 		return nil, err
@@ -358,7 +351,35 @@ func GetCurDirList(path string, server_type string) (dirmap map[string]string, e
 
 	for _, fi := range dir {
 		if fi.IsDir() {
-			dirmap[fi.Name()] = path + PthSep + fi.Name() + PthSep + server_type
+
+			//过滤掉不需要更新的子服务
+			if strings.Contains(filter, fi.Name()) {
+				continue
+			}
+
+			//获取子目录
+			subDir, err := ioutil.ReadDir(path + PthSep + fi.Name())
+			if err != nil {
+				logU.ErrorDoo(err)
+				continue
+			}
+
+			count := 0
+			subDirName := ""
+			for _, subFi := range subDir {
+				if subFi.IsDir() && strings.Contains(subFi.Name(), server_type) {
+					count++
+					subDirName = subFi.Name()
+				}
+			}
+
+			//只允许存在一个该类型的子文件如E:\tradesystem\server_id\trade4 不能还存在E:\tradesystem\server_id\MT4这种的
+			if count == 1 {
+				dirmap[fi.Name()] = path + PthSep + fi.Name() + PthSep + subDirName
+			} else {
+				logU.ErrorDoo("Please check in the path", path+PthSep+fi.Name(), "contians the server_type", server_type, "dir")
+			}
+
 		}
 	}
 
