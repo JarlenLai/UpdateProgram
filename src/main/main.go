@@ -111,7 +111,8 @@ func GetCfgPath() (string, error) {
 			"#server_prefix 要更新的服务名称的前缀\r\n" +
 			"#not_update_serverid 表示无需更新的serverID（使用,号隔开）,为空则表示全部都更新\r\n" +
 			"#backup_file_num 最多保留的备份的个数,多余并且最旧的会被清理掉\r\n" +
-			"[Update_Cfg]\r\nsource_dir=\r\nsource_file_suffix=\r\nsource_exe_name=\r\ntarget_dir=\r\nserver_type=\r\nserver_prefix=\r\nnot_update_serverid=\r\nbackup_file_num=\r\n\n"
+			"#update_stop_flag更新停止标识是否启用（等于1启用:当更新到某个服务并且重启失败时就停止后续的更新，为0不启用）默认是0\r\n" +
+			"[Update_Cfg]\r\nsource_dir=\r\nsource_file_suffix=\r\nsource_exe_name=\r\ntarget_dir=\r\nserver_type=\r\nserver_prefix=\r\nnot_update_serverid=\r\nbackup_file_num=\r\nupdate_stop_flag=0\r\n\n"
 
 		file.WriteString(initContent)
 	}

@@ -18,6 +18,7 @@ type UpdateCfg struct {
 	server_prefix       string
 	not_update_serverid string //不需要更新的serverID 字符串中使用逗号隔开
 	backup_file_num     int
+	update_stop_flag    int //更新停止标识是否启用（等于1启用:当更新到某个服务并且重启失败时就停止后续的更新，为0不启用）
 	mu                  sync.RWMutex
 }
 
@@ -51,6 +52,7 @@ func (upcfg *UpdateCfg) Load(path string) error {
 	upcfg.server_prefix = ""
 	upcfg.not_update_serverid = ""
 	upcfg.backup_file_num = 3
+	upcfg.update_stop_flag = 0
 	if sec, er := cfg.GetSection("Update_Cfg"); er == nil {
 		if sec.HasKey("source_dir") {
 			upcfg.source_dir = sec.Key("source_dir").String()
@@ -75,6 +77,9 @@ func (upcfg *UpdateCfg) Load(path string) error {
 		}
 		if sec.HasKey("backup_file_num") {
 			upcfg.backup_file_num, _ = sec.Key("backup_file_num").Int()
+		}
+		if sec.HasKey("update_stop_flag") {
+			upcfg.update_stop_flag, _ = sec.Key("update_stop_flag").Int()
 		}
 	}
 

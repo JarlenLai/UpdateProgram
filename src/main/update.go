@@ -18,17 +18,23 @@ import (
 
 )
 
+const (
+	Update_Continue = 0
+	Update_Stop     = 1
+)
+
 //更新程序结构体
 type UpdateProgram struct {
-	author          string
-	exe_version     string
-	source_file     map[string]string //文件名 + 文件完整路径
-	source_exe_file string            //源文件exe路径
-	target_dir      map[string]string //serverID + 目标文件路径
-	target_exe_file map[string]string //serverID + 目标exe路径
-	server_type     string
-	server_prefix   string
-	backup_file_num int
+	author           string
+	exe_version      string
+	source_file      map[string]string //文件名 + 文件完整路径
+	source_exe_file  string            //源文件exe路径
+	target_dir       map[string]string //serverID + 目标文件路径
+	target_exe_file  map[string]string //serverID + 目标exe路径
+	server_type      string
+	server_prefix    string
+	backup_file_num  int
+	update_stop_flag int
 }
 
 func NewUpdateProgram() *UpdateProgram {
@@ -45,6 +51,7 @@ func (up *UpdateProgram) Load(upcfg *UpdateCfg) error {
 	up.server_prefix = upcfg.server_prefix
 	up.source_exe_file = upcfg.source_dir + PthSep + upcfg.source_exe_name
 	up.backup_file_num = upcfg.backup_file_num
+	up.update_stop_flag = upcfg.update_stop_flag
 
 	up.source_file = make(map[string]string, 0)
 	up.target_dir = make(map[string]string, 0)
@@ -81,7 +88,7 @@ func (up *UpdateProgram) StartUpdate() (serverName []string) {
 	for k, v := range up.target_dir {
 
 		if _, ok := up.target_exe_file[k]; !ok {
-			logU.ErrorDoo("serverID:", k, " not exist correspond exe file")
+			logU.InfoDoo("serverID:", k, " not exist correspond exe file")
 			fail++
 			continue
 		}
@@ -147,7 +154,13 @@ func (up *UpdateProgram) StartUpdate() (serverName []string) {
 			if !RestartServer(up.server_prefix + k) {
 				logU.ErrorDoo("RestartServer:", up.server_prefix+k, "fail please check:", up.target_exe_file[k])
 				fail++
-				goto errorEnd
+				if up.update_stop_flag == Update_Stop {
+					goto errorEnd
+				} else if up.update_stop_flag == Update_Continue {
+					continue
+				} else {
+					logU.ErrorDoo("don't know update_stop_flag", up.update_stop_flag)
+				}
 			}
 
 			//存储更新成功的程序的服务名
