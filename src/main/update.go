@@ -78,7 +78,7 @@ func (up *UpdateProgram) Load(upcfg *UpdateCfg) error {
 	return nil
 }
 
-//StartUpdate 更新文件开始,如果某一个文件更新失败即停止更新后续的，如果某个文件更新后启动失败也同样停止更新后续的
+//StartUpdate 更新文件开始,如果某一个文件更新失败即停止更新后续的，如果某个文件更新后启动失败由标志update_stop_flag决定是否停止更新后续的
 func (up *UpdateProgram) StartUpdate() (serverName []string) {
 
 	PthSep := string(os.PathSeparator)
@@ -109,7 +109,7 @@ func (up *UpdateProgram) StartUpdate() (serverName []string) {
 		for name, f := range up.source_file {
 			//除了exe文件外先把目标的文件进行重命名
 			if !strings.HasSuffix(f, ".exe") {
-				rn := GetNotDittoFileName(v, GetFileNamePrefixByPath(name), up.author, GetFileNameSuffixByPath(name))
+				rn := GetNotDittoFileName(v, GetFileNamePrefixByFile(name), up.author, GetFileNameSuffixByPath(name))
 				cn := v + PthSep + name
 				if b := FileIsExisted(cn); b {
 					err := os.Rename(cn, rn)
@@ -120,7 +120,7 @@ func (up *UpdateProgram) StartUpdate() (serverName []string) {
 
 				//最多保留up.backup_file_num个会覆盖的目的文件,多余的删除
 				if dstName, err := GetFileNameByPath(f); err == nil {
-					ClearBackupFile(v, dstName, []string{GetFileNameSuffixByPath(name)}, up.backup_file_num)
+					ClearBackupFileByMatch(v, dstName, []string{GetFileNameSuffixByPath(name)}, up.backup_file_num)
 				}
 
 			}
@@ -148,7 +148,7 @@ func (up *UpdateProgram) StartUpdate() (serverName []string) {
 		fi.GetExeVersion()
 		if fi.Version == up.exe_version {
 			//更新成功进行多余备份文件处理，最多保留up.backup_file_num个exe文件,多余的删除
-			ClearBackupFile(v, up.server_prefix+k+".exe", []string{"exe"}, up.backup_file_num)
+			ClearBackupFileBySuffix(v, up.server_prefix+k+".exe", []string{"exe"}, up.backup_file_num)
 
 			//重启服务，内部会等待直到服务启动或者启动超时
 			if !RestartServer(up.server_prefix + k) {
@@ -262,8 +262,8 @@ func (list FileAttrList) Swap(i, j int) {
 	list[j] = temp
 }
 
-//清理备份文件(对于某个目录下的某种文件类型,除了当前在使用的那个外，最多能保留多少个，多余的就删除掉)
-func ClearBackupFile(fileDir, fileName string, suffixs []string, num int) {
+//清理备份文件通过文件后缀的方式(对于某个目录下的某种文件类型,除了当前在使用的那个外，最多能保留多少个，多余的就删除掉)
+func ClearBackupFileBySuffix(fileDir, fileName string, suffixs []string, num int) {
 	PthSep := string(os.PathSeparator)
 	needOpList := make([]*FileAttr, 0)
 	retainFile := fileDir + PthSep + fileName
@@ -274,6 +274,41 @@ func ClearBackupFile(fileDir, fileName string, suffixs []string, num int) {
 					needOpList = append(needOpList, &FileAttr{v, GetFileModTime(v)})
 				}
 			}
+		}
+
+		//根据修改时间对文件进行排序
+		sort.Sort(FileAttrList(needOpList))
+
+		//删除掉创建时间比较久的文件
+		if len(needOpList) > num {
+			deleteNum := len(needOpList) - num
+			for i := 0; i < deleteNum; i++ {
+				os.Remove(needOpList[i].path)
+			}
+		}
+
+	}
+}
+
+//清理备份文件通过文件名部分匹配的方式(除了当前在使用的那个外，最多能保留多少个，多余的就删除掉)
+func ClearBackupFileByMatch(fileDir, fileName string, suffixs []string, num int) {
+	PthSep := string(os.PathSeparator)
+	needOpList := make([]*FileAttr, 0)
+	retainFile := fileDir + PthSep + fileName
+	if curFileList, err := GetFiles(fileDir, suffixs, false); err == nil {
+		thisFileList := make([]string, 0)
+		for _, v := range curFileList {
+			if retainFile != v && GetSourceFileByBack(v) == fileName {
+				thisFileList = append(thisFileList, v)
+			}
+		}
+
+		if len(thisFileList) > num {
+			for _, v := range thisFileList {
+				needOpList = append(needOpList, &FileAttr{v, GetFileModTime(v)})
+			}
+		} else {
+			return
 		}
 
 		//根据修改时间对文件进行排序
@@ -442,6 +477,7 @@ func GetFileNameByPath(path string) (string, error) {
 	}
 }
 
+//通过文件路径获取文件后缀名(带点.的)
 func GetFileNameSuffixByPath(path string) string {
 	index := strings.LastIndex(path, ".")
 	if index != -1 {
@@ -450,10 +486,22 @@ func GetFileNameSuffixByPath(path string) string {
 	return ".unknow"
 }
 
-func GetFileNamePrefixByPath(path string) string {
+//GetFileNamePrefixByFile 通过完整文件名获取文件前缀
+func GetFileNamePrefixByFile(path string) string {
 	index := strings.LastIndex(path, ".")
 	if index != -1 {
 		return path[:index]
+	}
+	return "unknow"
+}
+
+//GetSourceFileByBack 通过备份文件路径获取源文件名（包含后缀）
+func GetSourceFileByBack(path string) string {
+	backName, _ := GetFileNameByPath(path)
+	suffix := GetFileNameSuffixByPath(path)
+	index := strings.LastIndex(backName, "(")
+	if index != -1 {
+		return backName[:index] + suffix
 	}
 	return "unknow"
 }
