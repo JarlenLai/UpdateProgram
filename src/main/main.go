@@ -9,7 +9,8 @@ import (
 
 )
 
-var logU = logdoo.NewLogger() //log函数
+var logU = logdoo.NewLogger()   //log函数即记录日记也打印到控制台
+var logUEx = logdoo.NewLogger() //log函数只记录到日中
 
 //初始化
 func init() {
@@ -17,6 +18,7 @@ func init() {
 		var logUF = logdoo.NewDayLogHandle(logPath, 800)
 		var logUC = logdoo.NewConsoleHandler()
 		logU.SetHandlers(logUF, logUC)
+		logUEx.SetHandlers(logUF)
 	}
 }
 
@@ -35,12 +37,28 @@ func main() {
 
 	updateProgram := NewUpdateProgram()
 	updateProgram.Load(updateCfg)
-	updateProgram.StartUpdate()
+	successList, failList := updateProgram.StartUpdate()
+
+	//打印更新成功的serverID
+	str := "\r\n"
+	for _, s := range successList {
+		str += s + "\r\n"
+	}
+	logU.InfoDoo("Update Success List:", str)
+
+	//打印更新成功的serverID
+	str = "\r\n"
+	for _, s := range failList {
+		str += s + "\r\n"
+	}
+	logU.InfoDoo("Update Fail List:", str)
+
+	logU.InfoDoo()
 
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Print("**Update end please check the log to confirm update result**\n\n")
-	fmt.Print(">>please input enter to quit\n")
-	reader.ReadString('\n')
+	fmt.Print(">>please input q to quit\n")
+	reader.ReadString('q')
 }
 
 //PathExists 判断路径是否存在

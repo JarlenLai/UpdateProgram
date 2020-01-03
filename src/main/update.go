@@ -69,17 +69,21 @@ func (up *UpdateProgram) Load(upcfg *UpdateCfg) error {
 		}
 	}
 
+	updateList := "\r\n"
 	//根据目标目录配置得出需要更新的目标目录文件夹
 	up.target_dir, _ = GetCurDirList(upcfg.target_dir, upcfg.server_type, upcfg.not_update_serverid)
 	for k, v := range up.target_dir {
 		up.target_exe_file[k] = v + PthSep + up.server_prefix + k + ".exe"
+		updateList += k + "\r\n"
 	}
+
+	logU.InfoDoo("Cur Need To Update ServerID List:", updateList)
 
 	return nil
 }
 
 //StartUpdate 更新文件开始,如果某一个文件更新失败即停止更新后续的，如果某个文件更新后启动失败由标志update_stop_flag决定是否停止更新后续的
-func (up *UpdateProgram) StartUpdate() (serverName []string) {
+func (up *UpdateProgram) StartUpdate() (successServerName, failServerName []string) {
 
 	PthSep := string(os.PathSeparator)
 	var success int = 0
@@ -90,6 +94,8 @@ func (up *UpdateProgram) StartUpdate() (serverName []string) {
 		if _, ok := up.target_exe_file[k]; !ok {
 			logU.InfoDoo("serverID:", k, " not exist correspond exe file")
 			fail++
+			failServerName = append(failServerName, up.server_prefix+k)
+			logU.InfoDoo("Update progress[success:", success, "fail:", fail, "total:", len(up.target_dir))
 			continue
 		}
 		curName := up.target_exe_file[k]
@@ -101,6 +107,8 @@ func (up *UpdateProgram) StartUpdate() (serverName []string) {
 			if err != nil {
 				logU.ErrorDoo("Rename file err: ", err, " curName:", curName, " desName:", renName)
 				fail++
+				failServerName = append(failServerName, up.server_prefix+k)
+				logU.InfoDoo("Update progress[success:", success, "fail:", fail, "total:", len(up.target_dir))
 				continue
 			}
 		}
@@ -139,6 +147,8 @@ func (up *UpdateProgram) StartUpdate() (serverName []string) {
 			if err != nil {
 				logU.ErrorDoo("Rename file err: ", err, " curName:", dstExePath, " desName:", curName)
 				fail++
+				failServerName = append(failServerName, up.server_prefix+k)
+				logU.InfoDoo("Update progress[success:", success, "fail:", fail, "total:", len(up.target_dir))
 				continue
 			}
 		}
@@ -150,25 +160,29 @@ func (up *UpdateProgram) StartUpdate() (serverName []string) {
 			//更新成功进行多余备份文件处理，最多保留up.backup_file_num个exe文件,多余的删除
 			ClearBackupFileBySuffix(v, up.server_prefix+k+".exe", []string{"exe"}, up.backup_file_num)
 
-			//重启服务，内部会等待直到服务启动或者启动超时
+			//重启服务，内部会等待直到服务启动或者启动超时(内部标识决定某个服务重启失败是否要继续更新其它的)
 			if !RestartServer(up.server_prefix + k) {
-				logU.ErrorDoo("RestartServer:", up.server_prefix+k, "fail please check:", up.target_exe_file[k])
+				logUEx.ErrorDoo("RestartServer:", up.server_prefix+k, "fail please check:", up.target_exe_file[k])
 				fail++
+				failServerName = append(failServerName, up.server_prefix+k)
 				if up.update_stop_flag == Update_Stop {
 					goto errorEnd
 				} else if up.update_stop_flag == Update_Continue {
+					logU.InfoDoo("Update progress[success:", success, "fail:", fail, "total:", len(up.target_dir))
 					continue
 				} else {
 					logU.ErrorDoo("don't know update_stop_flag", up.update_stop_flag)
+					goto errorEnd
 				}
 			}
 
 			//存储更新成功的程序的服务名
-			serverName = append(serverName, up.server_prefix+k)
-			logU.InfoDoo("File:", up.target_exe_file[k], "update success and restart success version is:", fi.Version)
+			successServerName = append(successServerName, up.server_prefix+k)
+			logUEx.InfoDoo("File:", up.target_exe_file[k], "update success and restart success version is:", fi.Version)
 		} else {
 			logU.ErrorDoo("File:", up.target_exe_file[k], "update fail version is:", fi.Version, "please check exe_version is match")
 			fail++
+			failServerName = append(failServerName, up.server_prefix+k)
 			goto errorEnd
 		}
 
@@ -186,22 +200,22 @@ func RestartServer(name string) bool {
 	servicePidPre, _ := GetServicePID(name)     //先查询服务PID
 	statuePre, err := winsvc.QueryService(name) //先查询服务状态
 	if err != nil {
-		logU.ErrorDoo("QueryService", name, "fail:", err)
+		logUEx.ErrorDoo("QueryService", name, "fail:", err)
 		return false
 	}
 
 	//重启服务
 	if statuePre == "Running" {
 		if err := winsvc.StopService(name); err != nil {
-			logU.ErrorDoo("StopService", name, "fail:", err)
+			logUEx.ErrorDoo("StopService", name, "fail:", err)
 		}
 
 		if err := winsvc.StartService(name); err != nil {
-			logU.ErrorDoo("StartService1", name, "fail:", err)
+			logUEx.ErrorDoo("StartService1", name, "fail:", err)
 		}
 	} else {
 		if err := winsvc.StartService(name); err != nil {
-			logU.ErrorDoo("StartService2", name, "fail:", err)
+			logUEx.ErrorDoo("StartService2", name, "fail:", err)
 		}
 	}
 
@@ -425,7 +439,7 @@ func GetCurDirList(path, server_type, filter string) (dirmap map[string]string, 
 			if count == 1 {
 				dirmap[fi.Name()] = path + PthSep + fi.Name() + PthSep + subDirName
 			} else {
-				logU.ErrorDoo("Please check in the path", path+PthSep+fi.Name(), "contians the server_type", server_type, "dir")
+				logUEx.InfoDoo("Please check in the path", path+PthSep+fi.Name(), "contians the server_type", server_type, "dir")
 			}
 
 		}
