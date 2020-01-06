@@ -220,10 +220,16 @@ func RestartServer(name string) bool {
 	}
 
 	//重新启动成功的标志是PID前后不一样并且服务是运行状态的
+	count := 0
+QuryTry:
 	servicePidAfter, _ := GetServicePID(name)
 	statueAfter, _ := winsvc.QueryService(name)
 	if servicePidPre != servicePidAfter && statueAfter == "Running" {
 		return true
+	} else if servicePidPre != servicePidAfter && statueAfter != "Stopped" && count < 5 {
+		logUEx.ErrorDoo("RestartServer", name, "oldPID:", servicePidPre, "newPID:", servicePidAfter, "statue:", statueAfter)
+		count++
+		goto QuryTry
 	}
 
 	return false
